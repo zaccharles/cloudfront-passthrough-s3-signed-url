@@ -13,4 +13,4 @@ Notes:
 * There is no way to determine the `s3` URL from the `cf` URL.
 * CloudFront only compresses files with a `Content-Type` header value listed [here](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ServingCompressedFiles.html#compressed-content-cloudfront-file-types).
 * CloudFront only compresses files that are between 1,000 bytes and 10,000,000 bytes in size.
-* Read [Serving compressed files](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ServingCompressedFiles.htm) for more information.
+* Read [Serving compressed files](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ServingCompressedFiles.html) for more information.
