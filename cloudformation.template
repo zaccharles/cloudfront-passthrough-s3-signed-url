@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Resources:
+  OriginRequestPolicy:
+    Type: 'AWS::CloudFront::OriginRequestPolicy'
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: default
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: none
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  CachePolicy:
+    Type: 'AWS::CloudFront::CachePolicy'
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 60
+        MinTTL: 1
+        MaxTTL: 300
+        Name: default
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          CookiesConfig:
+            CookieBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+
+  Distribution:
+    Type: 'AWS::CloudFront::Distribution'
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: bucket
+            DomainName: !GetAtt Bucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        Enabled: true
+        DefaultCacheBehavior:
+          Compress: true
+          AllowedMethods:
+            - GET
+            - HEAD
+          TargetOriginId: bucket
+          OriginRequestPolicyId: !Ref OriginRequestPolicy
+          CachePolicyId: !Ref CachePolicy
+          ViewerProtocolPolicy: redirect-to-https
+
+  Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+
+  Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 's3:GetObject'
+                Resource: !Sub 
+                  - '${BucketArn}/*'
+                  - BucketArn: !GetAtt Bucket.Arn
+
+  Function:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Runtime: nodejs12.x
+      Role: !GetAtt Role.Arn
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          var aws = require('aws-sdk')
+          var s3 = new aws.S3();
+
+          exports.handler = async function(event, context) {
+            let params = {
+                Bucket: process.env.BUCKET_NAME,
+                Key: event.key,
+                Expires: 300
+            };
+            
+            let url = await s3.getSignedUrlPromise('getObject', params)
+            return {
+              s3: url,
+              cf: url.replace(process.env.BUCKET_REGIONAL_DOMAIN_NAME, process.env.DISTRIBUTION_DOMAIN_NAME)
+            };
+          }
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref Bucket
+          BUCKET_REGIONAL_DOMAIN_NAME: !GetAtt Bucket.RegionalDomainName
+          DISTRIBUTION_DOMAIN_NAME: !GetAtt Distribution.DomainName
